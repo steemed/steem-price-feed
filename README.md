@@ -231,7 +231,7 @@ chdir /home/ima/steem
 
 # Specify the process/command to start, e.g.
 exec ./cli_wallet -u user -p password \
-                --rpc-endpoint=127.0.0.1:8091 -d 2>cli-debug.log 1>cli-error.log &
+                --rpc-endpoint=127.0.0.1:8091 -d 2>cli-debug.log 1>cli-error.log
 ```
 
 Upstart Service `steem-price-feed`
@@ -272,5 +272,5 @@ respawn
 chdir /home/ima/steem
 
 # Specify the process/command to start, e.g.
-exec /usr/bin/python steem-price-feed.py feed.yaml 2>feed-debug.log 1>feed-error.log &
+exec /usr/bin/python steem-price-feed.py feed.yaml 2>feed-debug.log 1>feed-error.log
 ```
