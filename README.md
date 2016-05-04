@@ -22,7 +22,7 @@ any cycle is probabilistic. If the current estimated price satisfies the
 and minimum waiting period), then the variance of the feed history
 is calculated and the current price is converted to a
 [z-score](https://en.wikipedia.org/wiki/Standard_score). This score is
-converted to a cumulative probability using the
+then converted to a cumulative probability using the
 [standard error function](https://en.wikipedia.org/wiki/Error_function)
 and if a random number in the interval `[0,1)` is less than the cumulative
 probability, then the current price estimate is published. If not,
