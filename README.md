@@ -3,18 +3,33 @@ STEEM Price Feed: STEEM Currency Price Feed for Witnesses
 Introduction
 ============
 
-STEEM Price Feed is yet another [STEEM](https://steemit.com/) price feed for witnesses. It has several advantages over simpler feed
-scripts including:
+STEEM Price Feed is yet another [STEEM](https://steemit.com/) price feed for witnesses.
+It has several advantages over simpler feed scripts including:
 
 * Extensive configurability through a [YAML](http://yaml.org/) config file.
 * The ability to add exchanges through the config file.
 * Volume-weighted prices that proportionally reduce the influence of low volume markets.
+* Stochastic update based on variance analysis of price history.
+
+One innovation of STEEM Price Feed is that the decision to update at
+any cycle is probabilistic. If the current estimated price satisfies the
+"hard" publication criteria (exceeds a minimum price fluctation
+and minimum waiting period), then the variance of the feed history
+is calculated and the current price is converted to a
+[z-score](https://en.wikipedia.org/wiki/Standard_score). This score is
+converted to a cumulative probability using the
+[standard error function](https://en.wikipedia.org/wiki/Error_function)
+and if a random number in the interval `[0,1)` is less than the cumulative
+probability, then the current price estimate is published. If not,
+then STEEM Price Feed tries again after a waiting period.
+
 
 Dependencies
 ============
 
 STEEM Price Feed has only two dependencies: [PyYaml](http://pyyaml.org/) and
-[Requests](http://docs.python-requests.org/). On [Ubuntu](http://www.ubuntu.com/), these dependencies
+[Requests](http://docs.python-requests.org/).
+On [Ubuntu](http://www.ubuntu.com/), these dependencies
 can be installed with the following command:
 
 ```
