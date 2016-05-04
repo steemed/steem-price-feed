@@ -28,6 +28,20 @@ and if a random number in the interval `[0,1)` is less than the cumulative
 probability, then the current price estimate is published. If not,
 then STEEM Price Feed tries again after a waiting period.
 
+### Rationale for Stochastic Updating
+
+The stochastic updating utilized by STEEM Price Feed is based on decision
+theory, and attempts to answer the question "is the price observed now
+significant enough to warrant an update?" The answer to this question
+is probabilistic in nature because any significance in a price change has
+a component of uncertainty. Updating therefore reflects this uncertainty
+in that updating is more likely when there is a higher probability that a price
+change is significant (i.e. not due to the random variation observed in
+the price history). Because markets are extremely complex
+phenomena with far too many variables to model, the most reasonable estimate
+for this uncertainty is a
+[normal distribution](https://en.wikipedia.org/wiki/Normal_distribution).
+
 
 Dependencies
 ============
