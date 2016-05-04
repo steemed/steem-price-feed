@@ -3,13 +3,18 @@ STEEM Price Feed: STEEM Currency Price Feed for Witnesses
 Introduction
 ============
 
-STEEM Price Feed is yet another [STEEM](https://steemit.com/) price feed for witnesses.
+[STEEM Price Feed](https://github.com/steemed/steem-price-feed/) is yet another
+[STEEM](https://steemit.com/) price feed for witnesses.
 It has several advantages over simpler feed scripts including:
 
 * Extensive configurability through a [YAML](http://yaml.org/) config file.
 * The ability to add exchanges through the config file.
 * Volume-weighted prices that proportionally reduce the influence of low volume markets.
 * Stochastic update based on variance analysis of price history.
+
+
+Stochastic Updating
+-------------------
 
 One innovation of STEEM Price Feed is that the decision to update at
 any cycle is probabilistic. If the current estimated price satisfies the
