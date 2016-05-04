@@ -6,6 +6,7 @@ import time
 import math
 import json
 import random
+import signal
 import datetime
 
 import dateutil.parser
@@ -15,13 +16,24 @@ import yaml
 
 SQRT2 = math.sqrt(2.0)
 
-SEC_PER_HR = 3600.0      # 3600 seconds/hr
-MAX_HIST = 1000          # 1000 tx
-SLEEP_GRANULARITY = 10   # 10 sec
-LOOP_GRANULARITY = 0.25  # 1/4 of the min_publish_interval
+SEC_PER_HR = 3600.0       # 3600 seconds/hr
+MAX_HIST = 1000           # 1000 tx
+SLEEP_GRANULARITY = 0.25  # 0.25 sec
+LOOP_GRANULARITY = 0.25   # 1/4 of the min_publish_interval
 
 class DebugException(Exception):
   pass
+
+class GracefulKiller:
+  # https://stackoverflow.com/a/31464349
+  kill_now = False
+  def __init__(self):
+    signal.signal(signal.SIGINT, self.exit_gracefully)
+    signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+  def exit_gracefully(self,signum, frame):
+    self.kill_now = True
+
 
 class WalletRPC(object):
   def __init__(self, ip, port, rpcuser, rpcpassword):
@@ -177,18 +189,14 @@ def get_price_history(wallet):
   return history
 
 def feed_loop(settings, market_data, wallet):
+  killer = GracefulKiller()
   debug = settings.get("debug", False)
+  is_live = settings.get("is_live", True)
   witness_name = settings['witness_name']
   min_pub_intrvl = settings['min_publish_interval'] * SEC_PER_HR
-  max_pub_intrvl = settings['min_publish_interval'] * SEC_PER_HR
+  max_pub_intrvl = settings['max_publish_interval'] * SEC_PER_HR
   min_change = settings['min_publish_change']
-
   logfile_name = settings.get("log_file", None)
-
-  if logfile_name is None:
-    logfile = sys.stdout
-  else:
-    logfile = open(logfile_name, "a")
 
   try:
     base = float(settings['default_base'])
@@ -198,24 +206,42 @@ def feed_loop(settings, market_data, wallet):
     base = float(feed['current_median_history']['base'].split()[0])
 
   while True:
+    if logfile_name is None:
+      logfile = sys.stdout
+    else:
+      logfile = open(logfile_name, "a")
     loop_time = time.time()
+    logfile.write("\n\nLoop at %s.\n" % time.ctime(loop_time))
     stm_usd_wvp = None
     do_update = False
     prev = get_previous_feed(wallet, witness_name)
     if debug:
       logfile.write(str(prev) + "\n")
-    if prev['time'] > (loop_time - min_pub_intrvl):
-      pass
-    elif prev['time'] == None:
+    if prev['time'] == None:
+      if debug:
+        logfile.write("Time is None, updating.\n")
       do_update = True
     elif prev['time'] <= (loop_time - max_pub_intrvl):
       base = prev['base']
+      if debug:
+        logfile.write("Max time has expired, updating.\n")
       do_update = True
+    elif prev['time'] > (loop_time - min_pub_intrvl):
+      if debug:
+        logfile.write("Min time has not elapsed, skipping.\n")
+      do_update = False
     else:
       base = prev['base']
       stm_usd_wvp = get_stm_usd_wvp(market_data, logfile, debug)
-      if (abs(base - stm_usd_wvp) / base) >= min_change:
+      fraction = abs(base - stm_usd_wvp) / base
+      if fraction >= min_change:
+        if debug:
+          logfile.write("%s >= %s, updating.\n" % (fraction, min_change))
         do_update = True
+      else:
+        if debug:
+          logfile.write("%s < %s, skipping.\n" % (fraction, min_change))
+        do_update = False
     if do_update:
       if stm_usd_wvp == None:
         stm_usd_wvp = get_stm_usd_wvp(market_data, logfile, debug)
@@ -225,17 +251,29 @@ def feed_loop(settings, market_data, wallet):
       mean, stdev = mean_stdev(history)
       p = phi(base, mean, stdev)
       r = random_number()
-      if debug:
-        logfile.write("Mean: %s | STDev: %s | p: %s | r: %s\n" % (mean, stdev, p, r))
+      logfile.write("Mean: %s | STDev: %s | p: %s | rand: %s\n" % (mean, stdev, p, r))
       if r < p:
         feed_base = "%0.3f SBD" % base
         feed_quote = "1.000 STEEM"
         exch_rate = {"base": feed_base, "quote": feed_quote}
         logfile.write(str(("publish_feed", [witness_name, exch_rate, True])) + "\n")
-        if not debug:
+        if is_live:
           wallet("publish_feed", [witness_name, exch_rate, True])
+    else:
+      logfile.write("Skipping this round (%s).\n" % time.ctime(loop_time))
+    if logfile_name is not None:
+      logfile.close()
+    sys.stderr.flush()
+    sys.stdout.flush()
     while (time.time() - loop_time) < (min_pub_intrvl * LOOP_GRANULARITY):
+      if killer.kill_now:
+        logfile = open(logfile_name, "a")
+        logfile.write("Caught kill signal, exiting.\n")
+        logfile.close()
+        break
       time.sleep(SLEEP_GRANULARITY)
+    if killer.kill_now:
+      break
 
 def main():
   if len(sys.argv) != 2:
