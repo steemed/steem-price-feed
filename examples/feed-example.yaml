@@ -11,7 +11,7 @@ settings :
   rpc_user : "user"
   rpc_password : "password"
   default_base : 0.44
-  debug : true
+  debug : fakse
 # the following section should be updated when new price sources are
 # available, sources deleted, or APIs change
 market_data :
