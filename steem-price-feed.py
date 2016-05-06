@@ -7,6 +7,7 @@ import math
 import json
 import random
 import signal
+import logging
 import datetime
 
 import dateutil.parser
@@ -16,6 +17,7 @@ import yaml
 
 SQRT2 = math.sqrt(2.0)
 
+# no real reason to make any of these configurable
 SEC_PER_HR = 3600.0       # 3600 seconds/hr
 MAX_HIST = 1000           # 1000 tx
 SLEEP_GRANULARITY = 0.25  # 0.25 sec
@@ -120,32 +122,30 @@ def access(r, accessor):
   return r
 
 
-def get_exchange_data(specs, logfile, debug):
-  if debug:
-    logfile.write("## get_exchange_data\n")
-    logfile.write(str(specs) + "\n")
+def get_exchange_data(specs):
+  logging.debug("## get_exchange_data")
+  logging.debug(str(specs))
   r = requests.get(specs['url'], data=specs['query_params'])
   j = r.json()
-  if debug:
-    logfile.write(str(j) + "\n")
+  logging.debug(str(j))
   v = access(j, specs['accessor'])
   return v
 
 
-def get_vw_price(market, logfile, debug):
+def get_vw_price(market, debug):
   if debug:
     CatchallException = DebugException
-    logfile.write("## get_vw_price\n")
   else:
     CatchallException = Exception
+  logging.debug("## get_vw_price")
   price_volume = []
   total_volume = []
   for exchange_name in market:
     exch = market[exchange_name]
     try:
-      price = get_exchange_data(exch['price'], logfile, debug)
+      price = get_exchange_data(exch['price'])
       price = float(price)
-      volume = get_exchange_data(exch['volume'], logfile, debug)
+      volume = get_exchange_data(exch['volume'])
       volume = float(volume)
       price_volume.append(price * volume)
       total_volume.append(volume)
@@ -158,9 +158,9 @@ def get_vw_price(market, logfile, debug):
   return pv / v
 
 
-def get_stm_usd_wvp(market_data, logfile, debug):
-  btc_usd_wvp = get_vw_price(market_data['btc_usd'], logfile, debug)
-  stm_btc_wvp = get_vw_price(market_data['steem_btc'], logfile, debug)
+def get_stm_usd_wvp(market_data, debug):
+  btc_usd_wvp = get_vw_price(market_data['btc_usd'], debug)
+  stm_btc_wvp = get_vw_price(market_data['steem_btc'], debug)
   return btc_usd_wvp * stm_btc_wvp
 
 
@@ -191,12 +191,25 @@ def get_price_history(wallet):
 def feed_loop(settings, market_data, wallet):
   killer = GracefulKiller()
   debug = settings.get("debug", False)
+  # secret setting for devs, disable if you don't want to publish
   is_live = settings.get("is_live", True)
   witness_name = settings['witness_name']
   min_pub_intrvl = settings['min_publish_interval'] * SEC_PER_HR
   max_pub_intrvl = settings['max_publish_interval'] * SEC_PER_HR
   min_change = settings['min_publish_change']
   logfile_name = settings.get("log_file", None)
+
+  if debug:
+    log_level = logging.DEBUG
+  else:
+    log_level = logging.INFO
+
+  # secret advanced user setting, see https://docs.python.org/2/howto/logging.html
+  log_format = settings.get("log_format", "%(levelname)s: %(message)s")
+  if logfile_name is None:
+    logging.basicConfig(format=log_format, level=log_level)
+  else:
+    logging.basicConfig(format=log_format, filename=logfile_name, level=log_level)
 
   try:
     base = float(settings['default_base'])
@@ -211,65 +224,62 @@ def feed_loop(settings, market_data, wallet):
     else:
       logfile = open(logfile_name, "a")
     loop_time = time.time()
-    logfile.write("\n\nLoop at %s.\n" % time.ctime(loop_time))
+    check_time_msg = "#######  Update Cycle | %s  #######" % time.ctime(loop_time)
+    border = "#" * len(check_time_msg)
+    logging.info(border)
+    logging.info(check_time_msg)
+    logging.info(border)
     stm_usd_wvp = None
     do_update = False
     prev = get_previous_feed(wallet, witness_name)
-    if debug:
-      logfile.write(str(prev) + "\n")
+    logging.debug("Previous: %s", str(prev))
     if prev['time'] == None:
-      if debug:
-        logfile.write("Time is None, updating.\n")
+      logging.debug("Time is None, updating.")
       do_update = True
     elif prev['time'] <= (loop_time - max_pub_intrvl):
       base = prev['base']
-      if debug:
-        logfile.write("Max time has expired, updating.\n")
+      logging.debug("Max time has expired, updating.")
       do_update = True
     elif prev['time'] > (loop_time - min_pub_intrvl):
-      if debug:
-        logfile.write("Min time has not elapsed, skipping.\n")
+      logging.debug("Min time has not elapsed, skipping.")
       do_update = False
     else:
       base = prev['base']
-      stm_usd_wvp = get_stm_usd_wvp(market_data, logfile, debug)
+      stm_usd_wvp = get_stm_usd_wvp(market_data, debug)
       fraction = abs(base - stm_usd_wvp) / base
-      if fraction >= min_change:
-        if debug:
-          logfile.write("%s >= %s, updating.\n" % (fraction, min_change))
+      if stm_usd_wvp == 0:
+        do_update = False
+      elif fraction >= min_change:
+        logging.debug("%s >= %s, updating.", (fraction, min_change))
         do_update = True
       else:
-        if debug:
-          logfile.write("%s < %s, skipping.\n" % (fraction, min_change))
+        logging.debug("%s < %s, skipping." % (fraction, min_change))
         do_update = False
     if do_update:
       if stm_usd_wvp == None:
-        stm_usd_wvp = get_stm_usd_wvp(market_data, logfile, debug)
+        stm_usd_wvp = get_stm_usd_wvp(market_data, debug)
       if stm_usd_wvp > 0:
         base = stm_usd_wvp
       history = get_price_history(wallet)
       mean, stdev = mean_stdev(history)
       p = phi(base, mean, stdev)
       r = random_number()
-      logfile.write("Mean: %s | STDev: %s | p: %s | rand: %s\n" % (mean, stdev, p, r))
+      args = (base, mean, stdev, p, r)
+      logging.info("base: %s | mean: %s | dev: %s | p: %s | rand: %s", args)
       if r < p:
         feed_base = "%0.3f SBD" % base
         feed_quote = "1.000 STEEM"
         exch_rate = {"base": feed_base, "quote": feed_quote}
-        logfile.write(str(("publish_feed", [witness_name, exch_rate, True])) + "\n")
+        logging.info(str(("publish_feed", [witness_name, exch_rate, True])))
         if is_live:
           wallet("publish_feed", [witness_name, exch_rate, True])
     else:
-      logfile.write("Skipping this round (%s).\n" % time.ctime(loop_time))
-    if logfile_name is not None:
-      logfile.close()
+      logging.info("Skipping this cycle (%s).", time.ctime(loop_time))
     sys.stderr.flush()
     sys.stdout.flush()
     while (time.time() - loop_time) < (min_pub_intrvl * LOOP_GRANULARITY):
       if killer.kill_now:
-        logfile = open(logfile_name, "a")
-        logfile.write("Caught kill signal, exiting.\n")
-        logfile.close()
+        logging.info("Caught kill signal, exiting.")
         break
       time.sleep(SLEEP_GRANULARITY)
     if killer.kill_now:
