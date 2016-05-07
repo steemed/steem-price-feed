@@ -2,7 +2,6 @@
 settings :
   witness_name : imawitness
   wallet_password : RjwhCCGeiX4TePz7VempnXiX4Yn3bj7BaFpm2QYH
-  log_file : "feed.log"
   min_publish_interval : 1      # 1 hour
   max_publish_interval : 168    # 1 week (168 hours)
   min_publish_change : 0.03     # 3%
@@ -11,6 +10,7 @@ settings :
   rpc_user : "user"
   rpc_password : "password"
   default_base : 0.44
+  log_file : "feed.log"
   debug : false
 # the following section should be updated when new price sources are
 # available, sources deleted, or APIs change
@@ -20,58 +20,46 @@ market_data :
       price :
         url : "https://api.bitfinex.com/v1/pubticker/BTCUSD"
         query_params : null
-        data_type : json
         accessor : ["last_price"]
       volume:
         url : "https://api.bitfinex.com/v1/pubticker/BTCUSD"
         query_params : null
-        data_type : json
         accessor : ["volume"]
     coinbase :
       price :
         url : "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
         query_params : null
-        data_type : json
         accessor : ["price"]
       volume :
         url : "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
         query_params : null
-        data_type : json
         accessor : ["volume"]
     okcoin :
       price :
         url : "https://www.okcoin.com/api/v1/ticker.do"
         query_params :
-           - ["symbol", "btc_usd"]
-        data_type : json
+           {"symbol": "btc_usd"}
         accessor : ["ticker", "last"]
       volume :
         url : "https://www.okcoin.com/api/v1/ticker.do"
-        query_params : ["symbol"]
-        data_type : json
+        query_params : {"symbol": "btc_usd"}
         accessor : ["ticker", "vol"]
     bitstamp :
       price :
         url : "https://www.bitstamp.net/api/v2/ticker/btcusd/"
         query_params : null
-        data_type : json
         accessor : ["last"]
       volume :
         url : "https://www.bitstamp.net/api/v2/ticker/btcusd/"
         query_params : null
-        data_type : json
         accessor : ["volume"]
   steem_btc :
     bittrex :
       price :
         url : "https://bittrex.com/api/v1.1/public/getticker"
-        query_params :
-           - ["market", "BTC-STEEM"]
-        data_type : json
+        query_params : {"market": "BTC-STEEM"}
         accessor : ["result", "Last"]
       volume :
-        url : "https://bittrex.com/api/v1.1/public/getticker"
-        query_params :
-           - ["market", "BTC-STEEM"]
-        data_type : json
-        accessor : ["result", "Volume"]
+        url : "https://bittrex.com/api/v1.1/public/getmarketsummary"
+        query_params : {"market": "BTC-STEEM"}
+        accessor : ["result", 0, "Volume"]
