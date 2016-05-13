@@ -265,7 +265,7 @@ def feed_loop(settings, market_data, wallet):
       p = phi(base, mean, stdev)
       r = random_number()
       args = (base, mean, stdev, p, r)
-      logging.info("base: %s | mean: %s | dev: %s | p: %s | rand: %s", args)
+      logging.info("base: %s | mean: %s | dev: %s | p: %s | rand: %s", *args)
       if r < p:
         feed_base = "%0.3f SBD" % base
         feed_quote = "1.000 STEEM"
